@@ -302,7 +302,7 @@ details[open] summary::after { content:' ▴'; }
         <button class="page-nav-btn" id="pg2-btn" onclick="showOriginPage(2)">第二頁（6-9）</button>
       </div>
     </div>
-    <button class="start-btn" id="start-btn">踏入江湖</button>
+    <button class="start-btn" id="start-btn" type="button">踏入江湖</button>
     <div style="display:flex;gap:0.5rem;">
       <button id="load-btn" onclick="loadGame()" style="display:none;flex:1;background:rgba(44,58,74,0.06);border:1px solid rgba(44,58,74,0.15);border-radius:0.7rem;padding:0.65rem;font-family:'Noto Serif SC',serif;font-size:0.82rem;color:#4a5e72;letter-spacing:0.18em;cursor:pointer;">讀取存檔</button>
       <button id="del-btn" onclick="deleteSave()" style="display:none;background:rgba(120,40,40,0.06);border:1px solid rgba(120,40,40,0.15);border-radius:0.7rem;padding:0.65rem 0.9rem;font-family:'Noto Serif SC',serif;font-size:0.75rem;color:#7a3030;letter-spacing:0.1em;cursor:pointer;">刪除</button>
@@ -452,8 +452,8 @@ const ORIGINS = {
 const ITEM_DESCS_DEFAULT = {
   '黃馬褂':'皇家賜服免一次被捕',
   '補氣丹×3':'回復內力30點',
-  '金瀐藥':'治療外奱回血20點',
-  '家傳劍譜':'基礎劍法武蕁+2',
+  '金瘡藥':'治療外傷回血20點',
+  '家傳劍譜':'基礎劍法武藝+2',
   '通關文牒':'官方文件通關免查',
   '夜行衣':'夜間行動不易被發現',
   '迷魂香×2':'使敵人暈眩一回合'
@@ -597,6 +597,7 @@ let playerStats={ hp:100, silver:100, wuyi:10, fame:5, location:'北京城西', 
 let playerAttrs={ tizhi:10, neili:10, wuyi:10, shenfa:10, zhimou:10, meili:10 };
 let factionFavor={ chaoting:0, sanfan:0, wulin:0, xuelian:0, zhuhong:0 };
 let playerItems=[], playerItemCats={}, playerItemDescs={}, clues=[], historyLog=[], isTyping=false, demoIndex=0;
+let _gameStarted=false;
 
 const DEMO=[
   {story:`康熙七年，北京城西。\n\n寒風捲著黃葉掠過客棧簷角，你從夢中醒來，窗外已是黃昏。\n\n樓下喧嘩聲驟起——幾名身著官服的差役正押著一個老者，老者的長袍上繡著血蓮紋樣，神情倉皇卻不失從容。街道兩旁的行人紛紛側目，卻無一人敢上前。\n\n腰間的盤纏只剩最後幾錢，而這座城市的暗流，已在你腳下悄然流動……`,choices:['出手阻攔差役，救下老者','暗中跟隨，查明老者身份','前往附近酒館打聽消息','去城西鏢局尋找差事']},
@@ -630,6 +631,7 @@ function showOriginPage(n){
 
 document.querySelectorAll('.origin-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
+    if(_gameStarted) return;
     document.querySelectorAll('.origin-btn').forEach(b=>b.classList.remove('selected'));
     btn.classList.add('selected');
     playerOrigin=btn.dataset.origin;
@@ -641,7 +643,10 @@ document.getElementById('restart-btn').addEventListener('click',()=>location.rel
 document.getElementById('player-name').addEventListener('keydown',e=>{if(e.key==='Enter')startGame();});
 
 function startGame(){
-  if(!playerOrigin){ showToast('請先選擇出身背景'); return; }
+  _gameStarted=true;
+  const _snapshotOrigin=playerOrigin;
+  if(!_snapshotOrigin){ _gameStarted=false; showToast('請先選擇出身背景'); return; }
+  playerOrigin=_snapshotOrigin;
   playerName=document.getElementById('player-name').value.trim()||'無名俠客';
   apiKey=document.getElementById('api-key-input').value.trim();
   apiProvider=document.getElementById('api-provider').value;
@@ -707,22 +712,36 @@ function updateItems(){
   if(filtered.length===0){ itemsPanel.style.display='none'; return; }
   itemsPanel.style.display='block';
   const cats=['全部',...new Set(filtered.map(i=>playerItemCats[i]||'其他'))];
-  const btnHtml=cats.map(c=>{
+  const filterDiv=document.createElement('div');
+  filterDiv.style.cssText='display:flex;flex-wrap:wrap;gap:3px;margin-bottom:0.4rem;';
+  cats.forEach(function(c){
     const col=c==='全部'?'#b09878':(ITEM_CAT_COLORS[c]||'#7f8c8d');
     const active=_itemFilter===c;
-    const bg=active?col:'transparent';
-    const fc=active?'#fff':col;
-    return '<button onclick="event.stopPropagation();_itemFilter=\''+c+'\';updateItems();" style="font-size:0.62rem;padding:0.15rem 0.45rem;border-radius:3px;border:1px solid '+col+';background:'+bg+';color:'+fc+';cursor:pointer;font-family:var(--font-body);transition:all 0.2s;margin-bottom:2px;">'+c+'</button>';
-  }).join(' ');
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.textContent=c;
+    btn.style.cssText='font-size:0.62rem;padding:0.15rem 0.45rem;border-radius:3px;cursor:pointer;font-family:var(--font-body);transition:all 0.2s;margin-bottom:2px;border:1px solid '+col+';background:'+(active?col:'transparent')+';color:'+(active?'#fff':col)+';';
+    btn.addEventListener('click',function(e){ e.stopPropagation(); _itemFilter=c; updateItems(); });
+    filterDiv.appendChild(btn);
+  });
   const show=_itemFilter==='全部'?filtered:filtered.filter(i=>(playerItemCats[i]||'其他')===_itemFilter);
-  const itemHtml=show.map(i=>{
+  const itemsDiv=document.createElement('div');
+  itemsDiv.style.cssText='display:flex;flex-wrap:wrap;gap:0.3rem;';
+  show.forEach(function(i){
     const cat=playerItemCats[i]||'其他';
     const desc=playerItemDescs[i]||ITEM_DESCS_DEFAULT[i]||'';
     const col=ITEM_CAT_COLORS[cat]||'#7f8c8d';
-    const title=desc?(' title="['+cat+'] '+desc+'"'):'';
-    return '<span class="item-tag"'+title+' style="border-left:2px solid '+col+';padding-left:5px;">'+i+'<span style="font-size:0.55rem;color:'+col+';margin-left:3px;">['+cat+']</span></span>';
-  }).join(' ');
-  document.getElementById('item-list').innerHTML='<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:0.4rem;">'+btnHtml+'</div>'+itemHtml;
+    const span=document.createElement('span');
+    span.className='item-tag';
+    span.title=desc?('['+cat+'] '+desc):'';
+    span.style.cssText='border-left:2px solid '+col+';padding-left:5px;';
+    span.innerHTML=i+'<span style="font-size:0.55rem;color:'+col+';margin-left:3px;">['+cat+']</span>';
+    itemsDiv.appendChild(span);
+  });
+  const container=document.getElementById('item-list');
+  container.innerHTML='';
+  container.appendChild(filterDiv);
+  container.appendChild(itemsDiv);
 }
 
 function addClue(text){
